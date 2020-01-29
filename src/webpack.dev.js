@@ -1,15 +1,10 @@
 const path = require('path');
 
-const FaviconsWebpackPlugin = require('favicons-webpack-plugin');
-const CleanWebpackPlugin = require('clean-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
-const OptimizeCssAssetsPlugin = require('optimize-css-assets-webpack-plugin');
-const TerserWebpackPlugin = require('terser-webpack-plugin');
-
-const buildPath = path.resolve(__dirname, 'dist');
 
 module.exports = {
+    devtool: 'eval-cheap-module-source-map',
     entry: {
         'global': './src/js/global.js',
         'index': './src/js/index.js',
@@ -17,9 +12,9 @@ module.exports = {
         'showcase': './src/js/showcase.js',
         'contact': './src/js/contact.js'
     },
-    output: {
-        filename: '[name].[hash:20].js',
-        path: buildPath
+    devServer: {
+        port: 8080,
+        contentBase: path.join(__dirname, '../dist')
     },
     module: {
         rules: [
@@ -32,12 +27,21 @@ module.exports = {
                 }
             },
             {
-                test: /\.(scss|css|sass)$/,
+                test: /\.(scss|css)$/,
                 use: [
                     MiniCssExtractPlugin.loader,
-                    'css-loader',
-                    'postcss-loader',
-                    'sass-loader',
+                    {
+                        loader: 'css-loader',
+                        options: {
+                            sourceMap: true
+                        }
+                    },
+                    {
+                        loader: 'sass-loader',
+                        options: {
+                            sourceMap: true,
+                        }
+                    }
                 ]
             },
             {
@@ -46,7 +50,7 @@ module.exports = {
                     {
                         loader: 'url-loader',
                         options: {
-                            name: '[name].[hash:20].[ext]',
+                            name: '[path][name].[ext]?hash=[hash:20]',
                             limit: 8192
                         }
                     }
@@ -60,10 +64,10 @@ module.exports = {
                     }
                 ]
             }
-        ]
+        ],
     },
     plugins: [
-        new z({
+        new HtmlWebpackPlugin({
             filename: 'index.html',
             template: './src/index.html',
             inject: 'body',
@@ -87,43 +91,9 @@ module.exports = {
             inject: 'body',
             chunks: ['global', 'contact']
         }),
-        new CleanWebpackPlugin.CleanWebpackPlugin(),
-        new FaviconsWebpackPlugin({
-            logo: './src/assets/icon.png',
-            prefix: 'icons-[hash]/',
-            persistentCache: true,
-            inject: true,
-            background: '#121212',
-            title: 'Non-J.github.io',
-            favicons: {
-                appName: 'Non-J Github Page',
-                appDescription: 'Non-J Personal Github Page',
-                developerName: 'Non-J',
-                developerURL: 'https://Non-J.github.io',
-                background: '#121212',
-                theme_color: '#FFCA28',
-            }
-        }),
         new MiniCssExtractPlugin({
             filename: 'styles.[contenthash].css'
         }),
     ],
-    optimization: {
-        minimize: true,
-        minimizer: [
-            new TerserWebpackPlugin({
-                parallel: true,
-            }),
-            new OptimizeCssAssetsPlugin({
-                cssProcessor: require('cssnano'),
-                cssProcessorOptions: {
-                    discardComments: {
-                        removeAll: true
-                    },
-                    discardUnused: false
-                },
-                canPrint: true
-            }),
-        ],
-    }
+    optimization: {}
 };
