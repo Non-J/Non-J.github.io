@@ -35,6 +35,19 @@ function hslToRgb(h, s, l) {
     return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
+function shuffleArray(array) {
+    // Source: https://stackoverflow.com/questions/2450954/how-to-randomize-shuffle-a-javascript-array
+    let currentIndex = array.length, temporaryValue, randomIndex;
+    while (0 !== currentIndex) {
+        randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex -= 1;
+        temporaryValue = array[currentIndex];
+        array[currentIndex] = array[randomIndex];
+        array[randomIndex] = temporaryValue;
+    }
+    return array;
+}
+
 const canvas = document.getElementById('interactive-background');
 const ctx = canvas.getContext('2d');
 
@@ -46,56 +59,97 @@ window.addEventListener("resize", (event) => {
     canvas.height = window.innerHeight;
 })
 
-let mousePos = [];
+let userDrawTrail = [];
+
+window.addEventListener("mouseover", (event) => {
+    userDrawTrail.push([event.clientX, event.clientY]);
+});
+window.addEventListener("touchstart", (event) => {
+    if (event.touches.length === 1) {
+        userDrawTrail.push([event.changedTouches.item(0).clientX, event.changedTouches.item(0).clientY]);
+    }
+});
+
 window.addEventListener("mousemove", (event) => {
-    mousePos.push([event.clientX, event.clientY]);
+    userDrawTrail.push([event.clientX, event.clientY]);
 });
-
 window.addEventListener("touchmove", (event) => {
-    mousePos.push([event.changedTouches.item(0).clientX, event.changedTouches.item(0).clientY]);
+    userDrawTrail.push([event.changedTouches.item(0).clientX, event.changedTouches.item(0).clientY]);
 });
 
-let eqnResult;
-let hueValue = 0;
-let tPast = (new Date().getTime() % 20000) / 20000 * 12 * Math.PI;
+window.addEventListener("mouseout", (event) => {
+    userDrawTrail = [];
+});
+window.addEventListener("touchend", (event) => {
+    if (event.touches.length === 0) {
+        userDrawTrail = [];
+    }
+});
+
+let lorenzParams = [Math.random() * 15 + 10, Math.random() * 15 + 10, Math.random() * 15 + 10];
+
+function generateLorenzTrail(x, y, z, count) {
+    let result = [];
+    for (let i = 0; i < count; i++) {
+        result.push([x, y, z]);
+        x += (lorenzParams[0] * (y - x)) / 10000;
+        y += (x * (lorenzParams[1] - z) - y) / 10000;
+        z += (x * y - lorenzParams[2] * z) / 10000;
+    }
+    return result;
+}
+
+let trails = [];
+let hueValue = Math.random();
+let time = new Date().getTime();
+
+let randomAxis = shuffleArray([0, 1, 2]);
 
 function draw() {
-    let t = (new Date().getTime() % 20000) / 20000 * 12 * Math.PI;
-    let tDelta = t - tPast;
-    tPast = t;
+    let now = new Date().getTime();
+    let timeDelta = now - time;
+    time = now;
 
-    let eqnCurrentResult = [
-        Math.sin(t) * (Math.exp(Math.cos(t)) - 2 * Math.cos(4 * t)) - Math.pow(Math.sin(t / 12), 5),
-        Math.cos(t) * (Math.exp(Math.cos(t)) - 2 * Math.cos(4 * t)) - Math.pow(Math.sin(t / 12), 5),
-    ];
+    let rectBox = Math.min(canvas.width, canvas.height) / 1.25;
 
-    if (!eqnResult) {
-        eqnResult = eqnCurrentResult;
+    while (trails.length < 200) {
+        trails.push(generateLorenzTrail((Math.random() - 0.5) * rectBox, (Math.random() - 0.5) * rectBox, (Math.random() - 0.5) * rectBox, Math.round(Math.random() * 2000 + 100)));
     }
 
-    let rectScale = Math.min(window.innerWidth, window.innerHeight);
-
-    ctx.beginPath();
-    ctx.moveTo(window.innerWidth / 2 - eqnResult[0] / 6 * rectScale, rectScale / 2 + 20 - eqnResult[1] / 6 * rectScale);
-    ctx.lineTo(window.innerWidth / 2 - eqnCurrentResult[0] / 6 * rectScale, rectScale / 2 + 20 - eqnCurrentResult[1] / 6 * rectScale);
-    hueValue = (hueValue + tDelta / 10 + Math.random() * 0.01 + 1) % 1;
+    hueValue = (hueValue + timeDelta / 100000 + Math.random() * 0.01 + 1) % 1;
     let color = hslToRgb(hueValue, 1, 0.5);
     ctx.strokeStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
-    ctx.lineWidth = 2;
-    ctx.stroke();
+
+    for (let trail of trails) {
+        ctx.beginPath();
+        ctx.moveTo(trail[0][randomAxis[0]] + canvas.width / 2, trail[0][randomAxis[1]] + canvas.height / 2);
+
+        let sampleCount = Math.min(trail.length, timeDelta / 3);
+
+        for (let i = 1; i < sampleCount; i++) {
+            ctx.lineWidth = 2 * (trail[i][randomAxis[2]] / rectBox + 0.5);
+            ctx.lineTo(trail[i][randomAxis[0]] + canvas.width / 2, trail[i][randomAxis[1]] + canvas.height / 2);
+        }
+        ctx.stroke();
+
+        trail.splice(0, sampleCount - 1);
+    }
+
+    trails = trails.filter((val) => {
+        return val.length > 2
+    });
 
     ctx.beginPath();
-    for (let i = 0; i < mousePos.length - 1; i++) {
-        ctx.moveTo(mousePos[i][0], mousePos[i][1]);
-        ctx.lineTo(mousePos[i + 1][0], mousePos[i + 1][1]);
+    for (let i = 0; i < userDrawTrail.length - 1; i++) {
+        ctx.lineWidth = 2;
+        ctx.moveTo(userDrawTrail[i][0], userDrawTrail[i][1]);
+        ctx.lineTo(userDrawTrail[i + 1][0], userDrawTrail[i + 1][1]);
     }
-    mousePos.splice(0, mousePos.length - 1);
+    userDrawTrail.splice(0, userDrawTrail.length - 1);
     ctx.stroke();
 
     ctx.fillStyle = 'rgba(18,18,18,0.075)';
     ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
-
-    eqnResult = eqnCurrentResult;
 
     window.requestAnimationFrame(draw);
 }

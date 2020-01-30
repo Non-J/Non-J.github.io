@@ -101,7 +101,7 @@ module.exports = {
                 developerName: 'Non-J',
                 developerURL: 'https://Non-J.github.io',
                 background: '#121212',
-                theme_color: '#FFCA28',
+                theme_color: '#5C6BC0',
             }
         }),
         new MiniCssExtractPlugin({

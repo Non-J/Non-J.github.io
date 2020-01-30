@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "name": "Non-J Github Page",
+  "description": "Non-J Personal Github Page",
+  "icons": {
+    "60": "/icons-160ca1813fb30a6e301d839498e5209c/firefox_app_60x60.png",
+    "128": "/icons-160ca1813fb30a6e301d839498e5209c/firefox_app_128x128.png",
+    "512": "/icons-160ca1813fb30a6e301d839498e5209c/firefox_app_512x512.png"
+  },
+  "developer": {
+    "name": "Non-J",
+    "url": "https://Non-J.github.io"
+  }
+}
