@@ -1,0 +1,36 @@
+{
+  "name": "github-page",
+  "version": "1.0.0",
+  "description": "A personal github page",
+  "scripts": {
+    "dev": "parcel serve *.html",
+    "build": "parcel build *.html --no-source-maps"
+  },
+  "browserslist": [
+    "> 0.5%",
+    "not dead"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Non-J/Non-J.github.io.git"
+  },
+  "author": "Non-J",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Non-J/Non-J.github.io/issues"
+  },
+  "homepage": "https://Non-J.github.io",
+  "devDependencies": {
+    "@types/cannon": "^0.1.4",
+    "parcel": "^2.0.0-alpha.3.2",
+    "sass": "^1.26.5",
+    "typescript": "^3.8.3"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^4.1.0",
+    "babylon-mtoon-material": "^2.0.0",
+    "cannon": "^0.6.2",
+    "mobile-detect": "^1.4.4",
+    "normalize.css": "^8.0.1"
+  }
+}

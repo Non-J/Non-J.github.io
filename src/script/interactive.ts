@@ -1,0 +1,206 @@
+import * as BABYLON from './babylon';
+import { MToonMaterial } from 'babylon-mtoon-material';
+import cannon from 'cannon';
+import MobileDetect from 'mobile-detect';
+import domready from './domready';
+import hsl_to_rgb from './hsl_to_rgb';
+
+class InteractiveScene {
+  private canvas: HTMLCanvasElement;
+  private engine: BABYLON.Engine;
+  private scene: BABYLON.Scene;
+
+  private camera: BABYLON.ArcRotateCamera;
+  private camera_rotate: BABYLON.Animation;
+  private light: BABYLON.DirectionalLight;
+  private shadow: BABYLON.ShadowGenerator;
+
+  private base_meshes: Array<BABYLON.Mesh>;
+  private meshes: Array<BABYLON.Mesh>;
+
+  private last_update_time: number;
+
+  constructor(canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
+    this.engine = new BABYLON.Engine(this.canvas, true);
+    this.base_meshes = [];
+    this.meshes = [];
+    this.last_update_time = performance.now();
+  }
+
+  create_scene(): void {
+    // setup scene and background color
+    this.scene = new BABYLON.Scene(this.engine);
+    this.scene.clearColor = new BABYLON.Color4(2 / 15, 2 / 15, 2 / 15, 1.0);
+
+    // physics engine
+    let gravity_vector = new BABYLON.Vector3(0, -9.81, 0);
+    let physics_plugin = new BABYLON.CannonJSPlugin(true, 10, cannon);
+    this.scene.enablePhysics(gravity_vector, physics_plugin);
+
+    // camera
+    const camera_radius = 30;
+    this.camera = new BABYLON.ArcRotateCamera('camera', 0, Math.PI * 0.6, camera_radius, BABYLON.Vector3.Zero(), this.scene);
+
+    this.camera.allowUpsideDown = false;
+    this.camera.lowerBetaLimit = 0;
+    this.camera.upperBetaLimit = Math.PI * 0.6;
+    this.camera.lowerRadiusLimit = camera_radius;
+    this.camera.upperRadiusLimit = camera_radius;
+    this.camera.attachControl(this.canvas);
+
+    const camera_rotate_framerate = 60;
+    const camera_rotate_time = 30;
+    this.camera_rotate = new BABYLON.Animation('camera_rotate', 'alpha', camera_rotate_framerate, BABYLON.Animation.ANIMATIONTYPE_FLOAT);
+    this.camera_rotate.setKeys([
+      {
+        frame: 0,
+        value: 0
+      }, {
+        frame: camera_rotate_framerate * camera_rotate_time,
+        value: Math.PI * 2
+      }
+    ]);
+    this.camera.animations.push(this.camera_rotate);
+    this.scene.beginAnimation(this.camera, 0, camera_rotate_framerate * camera_rotate_time, true);
+
+    // light and shadow
+    this.light = new BABYLON.DirectionalLight('light', new BABYLON.Vector3(-Math.sin(Math.PI / 12), -Math.cos(Math.PI / 12), 0), this.scene);
+    this.light.position.scaleInPlace(500);
+    this.shadow = new BABYLON.ShadowGenerator(2048, this.light);
+
+    // generate base meshes
+    for (let i = 0; i < 250; i++) {
+      let material = new MToonMaterial(`mtoonmaterial_${i}`, this.scene);
+
+      let base_hue = Math.random();
+      let base_sat = Math.random() * 0.5 + 0.5;
+      material.diffuseColor = new BABYLON.Color3(...hsl_to_rgb(base_hue, base_sat, 0.7));
+      material.shadeColor = new BABYLON.Color3(...hsl_to_rgb(base_hue, base_sat, 0.5));
+
+      material.shadeToony = 0.5;
+      material.shadeShift = -1 / 6;
+      material.freeze();
+
+      let mesh = BABYLON.SphereBuilder.CreateSphere('sphere',
+        { segments: 16, diameter: 1 }, this.scene);
+      mesh.isVisible = false;
+      mesh.receiveShadows = true;
+      mesh.material = material;
+      mesh.physicsImpostor = new BABYLON.PhysicsImpostor(mesh, BABYLON.PhysicsImpostor.SphereImpostor, { mass: 0, friction: 0.75, restitution: 0.9 }, this.scene);
+
+      this.base_meshes.push(mesh);
+    }
+
+    let mesh_limit = 64;
+
+    // detect mobile and tablet, reduce mesh count accordingly
+    const mobile_detect = new MobileDetect(window.navigator.userAgent);
+    if (mobile_detect.tablet()) {
+      mesh_limit = 32;
+    } else if (mobile_detect.mobile()) {
+      mesh_limit = 24;
+    }
+
+    // spawn initial meshes
+    for (let i = 0; i < mesh_limit; i++) {
+      this.meshes.push(this.create_mesh());
+    }
+
+    // ground and its color-changing material
+    let ground = BABYLON.DiscBuilder.CreateDisc('ground', { radius: 30 }, this.scene);
+    ground.receiveShadows = true;
+    ground.physicsImpostor = new BABYLON.PhysicsImpostor(ground, BABYLON.PhysicsImpostor.MeshImpostor, { mass: 0, friction: 0.75, restitution: 0.75 }, this.scene);
+    ground.rotate(new BABYLON.Vector3(1, 0, 0), Math.PI / 2);
+    ground.position.y = -10;
+    ground.freezeWorldMatrix();
+
+    let ground_hue = Math.random();
+    let ground_material = new MToonMaterial(`ground_material`, this.scene);
+    ground.material = ground_material;
+
+    // update
+    this.scene.registerBeforeRender(() => {
+      let delta = performance.now() - this.last_update_time;
+      this.last_update_time = performance.now();
+
+      // update ground color
+      ground_hue = (ground_hue + delta / 100000) % 1;
+      ground_material.diffuseColor = new BABYLON.Color3(...hsl_to_rgb(ground_hue, 0.3, 0.7));
+      ground_material.shadeColor = new BABYLON.Color3(...hsl_to_rgb(ground_hue, 0.3, 0.5));;
+
+      this.respawn_meshes();
+    });
+  }
+
+
+  create_mesh(): BABYLON.Mesh {
+    let mesh = this.base_meshes[Math.floor(Math.random() * this.base_meshes.length)].clone();
+
+    mesh.isVisible = true;
+    this.shadow.addShadowCaster(mesh);
+    mesh.getPhysicsImpostor().setMass(Math.random() * 4 + 1);
+
+    // initial position
+    let spawn_dist = Math.random() * 20;
+    let spawn_theta = Math.random() * Math.PI * 2;
+    mesh.position.y = Math.random() * 75 + 10;
+    mesh.position.x = spawn_dist * Math.cos(spawn_theta);
+    mesh.position.z = spawn_dist * Math.sin(spawn_theta);
+
+    // initial kinetic energy
+    const spawn_angular_speed = 25;
+    mesh.getPhysicsImpostor().setAngularVelocity(new BABYLON.Vector3(Math.random() * spawn_angular_speed, Math.random() * spawn_angular_speed, Math.random() * spawn_angular_speed));
+
+    return mesh;
+  }
+
+  destroy_mesh(mesh: BABYLON.Mesh): void {
+    this.shadow.removeShadowCaster(mesh);
+    mesh.dispose();
+  }
+
+  respawn_meshes(): void {
+    // keep track of which mesh to respawn
+    let respawn_idx = [];
+
+    for (let idx = 0; idx < this.meshes.length; idx++) {
+      // check boundary
+      if (
+        this.meshes[idx].position.multiplyByFloats(1, 0, 1).length() > 40 ||
+        this.meshes[idx].position.y < -15
+      ) {
+        // destroy mesh that is out of bound
+        this.destroy_mesh(this.meshes[idx]);
+        respawn_idx.push(idx);
+        continue;
+      }
+
+      // nudge slow meshes
+      if (this.meshes[idx].getPhysicsImpostor().getLinearVelocity().length() < 0.1 && this.meshes[idx].position.y < -5) {
+        this.meshes[idx].getPhysicsImpostor().applyForce(this.meshes[idx].position.multiplyByFloats(1, 0, 1), new BABYLON.Vector3(0, 1, 0));
+      }
+    }
+
+    // recreate mesh
+    for (let idx of respawn_idx) {
+      this.meshes[idx] = this.create_mesh();
+    }
+
+  }
+
+  render(): void {
+    this.engine.runRenderLoop(() => {
+      this.scene.render();
+    });
+    window.addEventListener('resize', () => {
+      this.engine.resize();
+    });
+  }
+}
+
+domready(() => {
+  let interactive_scene = new InteractiveScene(document.getElementById('interactive-element') as HTMLCanvasElement);
+  interactive_scene.create_scene();
+  interactive_scene.render();
+});
