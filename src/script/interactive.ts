@@ -70,7 +70,7 @@ class InteractiveScene {
     this.shadow = new BABYLON.ShadowGenerator(2048, this.light);
 
     // generate base meshes
-    for (let i = 0; i < 250; i++) {
+    for (let i = 0; i < 30; i++) {
       let material = new MToonMaterial(`mtoonmaterial_${i}`, this.scene);
 
       let base_hue = Math.random();
@@ -84,10 +84,12 @@ class InteractiveScene {
 
       let mesh = BABYLON.SphereBuilder.CreateSphere('sphere',
         { segments: 16, diameter: 1 }, this.scene);
+      mesh.position.y = -20;
       mesh.isVisible = false;
       mesh.receiveShadows = true;
       mesh.material = material;
-      mesh.physicsImpostor = new BABYLON.PhysicsImpostor(mesh, BABYLON.PhysicsImpostor.SphereImpostor, { mass: 0, friction: 0.75, restitution: 0.9 }, this.scene);
+      mesh.cullingStrategy = BABYLON.Mesh.CULLINGSTRATEGY_BOUNDINGSPHERE_ONLY;
+      mesh.physicsImpostor = new BABYLON.PhysicsImpostor(mesh, BABYLON.PhysicsImpostor.SphereImpostor, { mass: 0, friction: 0.5, restitution: 0.9 }, this.scene);
 
       this.base_meshes.push(mesh);
     }
@@ -99,7 +101,7 @@ class InteractiveScene {
     if (mobile_detect.tablet()) {
       mesh_limit = 32;
     } else if (mobile_detect.mobile()) {
-      mesh_limit = 24;
+      mesh_limit = 16;
     }
 
     // spawn initial meshes
@@ -110,7 +112,7 @@ class InteractiveScene {
     // ground and its color-changing material
     let ground = BABYLON.DiscBuilder.CreateDisc('ground', { radius: 30 }, this.scene);
     ground.receiveShadows = true;
-    ground.physicsImpostor = new BABYLON.PhysicsImpostor(ground, BABYLON.PhysicsImpostor.MeshImpostor, { mass: 0, friction: 0.75, restitution: 0.75 }, this.scene);
+    ground.physicsImpostor = new BABYLON.PhysicsImpostor(ground, BABYLON.PhysicsImpostor.MeshImpostor, { mass: 0, friction: 0.5, restitution: 0.75 }, this.scene);
     ground.rotate(new BABYLON.Vector3(1, 0, 0), Math.PI / 2);
     ground.position.y = -10;
     ground.freezeWorldMatrix();
@@ -119,17 +121,64 @@ class InteractiveScene {
     let ground_material = new MToonMaterial(`ground_material`, this.scene);
     ground.material = ground_material;
 
+    // performance tracker
+    let frame_count = 0;
+    let frame_time_sum = 0;
+
     // update
     this.scene.registerBeforeRender(() => {
       let delta = performance.now() - this.last_update_time;
       this.last_update_time = performance.now();
 
+      // keep track of performance
+      frame_count++;
+      frame_time_sum += Math.min(delta, 50);
+
+      if (frame_count > 10) {
+        // if performance doesn't meet target
+        if (this.meshes.length > 8 && frame_time_sum / frame_count > 33) {
+          this.destroy_mesh(this.meshes.pop());
+        }
+
+        frame_count = 0;
+        frame_time_sum = 0;
+      }
+
       // update ground color
       ground_hue = (ground_hue + delta / 100000) % 1;
       ground_material.diffuseColor = new BABYLON.Color3(...hsl_to_rgb(ground_hue, 0.3, 0.7));
-      ground_material.shadeColor = new BABYLON.Color3(...hsl_to_rgb(ground_hue, 0.3, 0.5));;
+      ground_material.shadeColor = new BABYLON.Color3(...hsl_to_rgb(ground_hue, 0.3, 0.5));
 
-      this.respawn_meshes();
+      // keep track of which mesh to respawn
+      let respawn_idx = [];
+
+      for (let idx = 0; idx < this.meshes.length; idx++) {
+        // check boundary
+        if (
+          this.meshes[idx].position.multiplyByFloats(1, 0, 1).length() > 40 ||
+          this.meshes[idx].position.y < -15
+        ) {
+          // destroy mesh that is out of bound
+          this.destroy_mesh(this.meshes[idx]);
+          respawn_idx.push(idx);
+          continue;
+        }
+
+        // nudge slow meshes
+        if (this.meshes[idx].getPhysicsImpostor().getLinearVelocity().length() < 0.5 && this.meshes[idx].position.y < -5) {
+          this.meshes[idx].getPhysicsImpostor().applyForce(this.meshes[idx].position.multiplyByFloats(1, 0, 1).normalize().scale(10), new BABYLON.Vector3(0, 1, 0));
+        }
+
+        // artificial terminal velocity
+        if (this.meshes[idx].getPhysicsImpostor().getLinearVelocity().y < -12) {
+          this.meshes[idx].getPhysicsImpostor().getLinearVelocity().y = -12;
+        }
+      }
+
+      // recreate mesh
+      for (let idx of respawn_idx) {
+        this.meshes[idx] = this.create_mesh();
+      }
     });
   }
 
@@ -139,18 +188,19 @@ class InteractiveScene {
 
     mesh.isVisible = true;
     this.shadow.addShadowCaster(mesh);
-    mesh.getPhysicsImpostor().setMass(Math.random() * 4 + 1);
+    mesh.getPhysicsImpostor().setMass(Math.random() * 10 + 1);
 
     // initial position
-    let spawn_dist = Math.random() * 20;
-    let spawn_theta = Math.random() * Math.PI * 2;
-    mesh.position.y = Math.random() * 75 + 10;
-    mesh.position.x = spawn_dist * Math.cos(spawn_theta);
-    mesh.position.z = spawn_dist * Math.sin(spawn_theta);
+    const spawn_pos_dist = Math.random() * 20;
+    const spawn_pos_theta = Math.random() * Math.PI * 2;
+    mesh.position.y = Math.random() * 50 + 10;
+    mesh.position.x = spawn_pos_dist * Math.cos(spawn_pos_theta);
+    mesh.position.z = spawn_pos_dist * Math.sin(spawn_pos_theta);
 
     // initial kinetic energy
-    const spawn_angular_speed = 25;
-    mesh.getPhysicsImpostor().setAngularVelocity(new BABYLON.Vector3(Math.random() * spawn_angular_speed, Math.random() * spawn_angular_speed, Math.random() * spawn_angular_speed));
+    const spawn_spin_mag = 20 * Math.random() + 5;
+    const spawn_spin_theta = Math.random() * Math.PI * 2;
+    mesh.getPhysicsImpostor().setAngularVelocity(new BABYLON.Vector3(spawn_spin_mag * Math.cos(spawn_spin_theta), 0, spawn_spin_mag * Math.sin(spawn_spin_theta)));
 
     return mesh;
   }
@@ -158,35 +208,6 @@ class InteractiveScene {
   destroy_mesh(mesh: BABYLON.Mesh): void {
     this.shadow.removeShadowCaster(mesh);
     mesh.dispose();
-  }
-
-  respawn_meshes(): void {
-    // keep track of which mesh to respawn
-    let respawn_idx = [];
-
-    for (let idx = 0; idx < this.meshes.length; idx++) {
-      // check boundary
-      if (
-        this.meshes[idx].position.multiplyByFloats(1, 0, 1).length() > 40 ||
-        this.meshes[idx].position.y < -15
-      ) {
-        // destroy mesh that is out of bound
-        this.destroy_mesh(this.meshes[idx]);
-        respawn_idx.push(idx);
-        continue;
-      }
-
-      // nudge slow meshes
-      if (this.meshes[idx].getPhysicsImpostor().getLinearVelocity().length() < 0.1 && this.meshes[idx].position.y < -5) {
-        this.meshes[idx].getPhysicsImpostor().applyForce(this.meshes[idx].position.multiplyByFloats(1, 0, 1), new BABYLON.Vector3(0, 1, 0));
-      }
-    }
-
-    // recreate mesh
-    for (let idx of respawn_idx) {
-      this.meshes[idx] = this.create_mesh();
-    }
-
   }
 
   render(): void {

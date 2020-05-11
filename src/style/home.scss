@@ -94,7 +94,8 @@ article#main-content {
   @mixin colored-block-section($section-color) {
     border-left: thick solid $section-color;
     padding: 1em 1em 2em 1em;
-    width: min(48em, 100%);
+    width: 100%;
+    max-width: 48em;
 
     h1 {
       color: $section-color;
