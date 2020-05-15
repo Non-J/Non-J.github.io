@@ -18,14 +18,14 @@ class InteractiveScene {
   private base_meshes: Array<BABYLON.Mesh>;
   private meshes: Array<BABYLON.Mesh>;
 
-  private last_update_time: number;
+  private ground_mesh: BABYLON.Mesh;
+  private ground_mesh_hue_shift: BABYLON.Animation;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.engine = new BABYLON.Engine(this.canvas, true);
     this.base_meshes = [];
     this.meshes = [];
-    this.last_update_time = performance.now();
   }
 
   create_scene(): void {
@@ -42,6 +42,7 @@ class InteractiveScene {
     const camera_radius = 30;
     this.camera = new BABYLON.ArcRotateCamera('camera', 0, Math.PI * 0.6, camera_radius, BABYLON.Vector3.Zero(), this.scene);
 
+    // camera movement bound
     this.camera.allowUpsideDown = false;
     this.camera.lowerBetaLimit = 0;
     this.camera.upperBetaLimit = Math.PI * 0.6;
@@ -49,6 +50,7 @@ class InteractiveScene {
     this.camera.upperRadiusLimit = camera_radius;
     this.camera.attachControl(this.canvas);
 
+    // camera auto rotate
     const camera_rotate_framerate = 60;
     const camera_rotate_time = 30;
     this.camera_rotate = new BABYLON.Animation('camera_rotate', 'alpha', camera_rotate_framerate, BABYLON.Animation.ANIMATIONTYPE_FLOAT);
@@ -82,7 +84,7 @@ class InteractiveScene {
       material.shadeShift = -1 / 6;
       material.freeze();
 
-      let mesh = BABYLON.SphereBuilder.CreateSphere('sphere',
+      let mesh = BABYLON.SphereBuilder.CreateSphere(`sphere_${i}`,
         { segments: 16, diameter: 1 }, this.scene);
       mesh.position.y = -20;
       mesh.isVisible = false;
@@ -109,17 +111,36 @@ class InteractiveScene {
       this.meshes.push(this.create_mesh());
     }
 
-    // ground and its color-changing material
-    let ground = BABYLON.DiscBuilder.CreateDisc('ground', { radius: 30 }, this.scene);
-    ground.receiveShadows = true;
-    ground.physicsImpostor = new BABYLON.PhysicsImpostor(ground, BABYLON.PhysicsImpostor.MeshImpostor, { mass: 0, friction: 0.5, restitution: 0.75 }, this.scene);
-    ground.rotate(new BABYLON.Vector3(1, 0, 0), Math.PI / 2);
-    ground.position.y = -10;
-    ground.freezeWorldMatrix();
+    // ground
+    this.ground_mesh = BABYLON.DiscBuilder.CreateDisc('ground', { radius: 30 }, this.scene);
+    this.ground_mesh.receiveShadows = true;
+    this.ground_mesh.physicsImpostor = new BABYLON.PhysicsImpostor(this.ground_mesh, BABYLON.PhysicsImpostor.MeshImpostor, { mass: 0, friction: 0.5, restitution: 0.75 }, this.scene);
+    this.ground_mesh.rotate(new BABYLON.Vector3(1, 0, 0), Math.PI / 2);
+    this.ground_mesh.position.y = -10;
+    this.ground_mesh.freezeWorldMatrix();
 
-    let ground_hue = Math.random();
     let ground_material = new MToonMaterial(`ground_material`, this.scene);
-    ground.material = ground_material;
+    this.ground_mesh.material = ground_material;
+
+    // change ground color over time
+    const ground_hue_shift_const = Math.random(); 
+    const ground_hue_shift_framerate = 60;
+    const ground_hue_shift_time = 100;
+    this.ground_mesh.metadata = {
+      'ground_hue_shift': 0.0,
+    };
+    this.ground_mesh_hue_shift = new BABYLON.Animation('ground_color_shift', 'metadata.ground_hue_shift', ground_hue_shift_framerate, BABYLON.Animation.ANIMATIONTYPE_FLOAT);
+    this.ground_mesh_hue_shift.setKeys([
+      {
+        frame: 0,
+        value: 0.0
+      }, {
+        frame: ground_hue_shift_framerate * ground_hue_shift_time,
+        value: 1.0
+      }
+    ]);
+    this.ground_mesh.animations.push(this.ground_mesh_hue_shift);
+    this.scene.beginAnimation(this.ground_mesh, 0, ground_hue_shift_framerate * ground_hue_shift_time, true);
 
     // performance tracker
     let frame_count = 0;
@@ -127,8 +148,7 @@ class InteractiveScene {
 
     // update
     this.scene.registerBeforeRender(() => {
-      let delta = performance.now() - this.last_update_time;
-      this.last_update_time = performance.now();
+      let delta = this.engine.getDeltaTime();
 
       // keep track of performance
       frame_count++;
@@ -136,7 +156,7 @@ class InteractiveScene {
 
       if (frame_count > 10) {
         // if performance doesn't meet target
-        if (this.meshes.length > 8 && frame_time_sum / frame_count > 33) {
+        if (this.meshes.length > 8 && frame_time_sum / frame_count > 35) {
           this.destroy_mesh(this.meshes.pop());
         }
 
@@ -145,7 +165,10 @@ class InteractiveScene {
       }
 
       // update ground color
-      ground_hue = (ground_hue + delta / 100000) % 1;
+      let ground_hue = this.ground_mesh.metadata.ground_hue_shift + ground_hue_shift_const;
+      if (ground_hue > 1) {
+        ground_hue -= 1;
+      }
       ground_material.diffuseColor = new BABYLON.Color3(...hsl_to_rgb(ground_hue, 0.3, 0.7));
       ground_material.shadeColor = new BABYLON.Color3(...hsl_to_rgb(ground_hue, 0.3, 0.5));
 
@@ -181,7 +204,6 @@ class InteractiveScene {
       }
     });
   }
-
 
   create_mesh(): BABYLON.Mesh {
     let mesh = this.base_meshes[Math.floor(Math.random() * this.base_meshes.length)].clone();

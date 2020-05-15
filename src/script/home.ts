@@ -5,7 +5,7 @@ import domready from './domready';
 // packed in the bundle where it will fail if require
 // is not defined.
 if (window) {
-  window.require = null;
+  window['require'] = null;
 }
 
 function deobfuscate_data_href() {

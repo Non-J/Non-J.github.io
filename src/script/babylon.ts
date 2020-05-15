@@ -3,13 +3,11 @@
 export { Engine } from '@babylonjs/core/Engines/engine';
 export { Scene } from '@babylonjs/core/scene';
 
-export { Color3 } from '@babylonjs/core/Maths/math.color';
-export { Color4 } from '@babylonjs/core/Maths/math.color';
-export { Vector3 } from '@babylonjs/core/Maths/math.vector';
-export { Vector4 } from '@babylonjs/core/Maths/math.vector';
+export { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
+export { Vector3, Vector4 } from '@babylonjs/core/Maths/math.vector';
 
-export { Animation } from '@babylonjs/core/Animations/animation';
 export { } from '@babylonjs/core/Animations/animatable';
+export { Animation } from '@babylonjs/core/Animations/animation';
 
 export {  } from '@babylonjs/core/Materials/standardMaterial';
 export { Mesh } from '@babylonjs/core/Meshes/mesh';

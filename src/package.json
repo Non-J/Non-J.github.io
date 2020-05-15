@@ -20,17 +20,15 @@
     "url": "https://github.com/Non-J/Non-J.github.io/issues"
   },
   "homepage": "https://Non-J.github.io",
-  "devDependencies": {
-    "@types/cannon": "^0.1.4",
-    "parcel": "^2.0.0-alpha.3.2",
-    "sass": "^1.26.5",
-    "typescript": "^3.8.3"
-  },
   "dependencies": {
     "@babylonjs/core": "^4.1.0",
+    "@types/cannon": "^0.1.4",
     "babylon-mtoon-material": "^2.0.0",
     "cannon": "^0.6.2",
     "mobile-detect": "^1.4.4",
-    "normalize.css": "^8.0.1"
+    "normalize.css": "^8.0.1",
+    "parcel": "^2.0.0-alpha.3.2",
+    "sass": "^1.26.5",
+    "typescript": "^3.9.2"
   }
 }
