@@ -2,7 +2,8 @@
 
 export { Engine } from '@babylonjs/core/Engines/engine';
 export { Scene } from '@babylonjs/core/scene';
-
+export { PerformanceMonitor } from '@babylonjs/core/Misc/performanceMonitor';
+ 
 export { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 export { Vector3, Vector4 } from '@babylonjs/core/Maths/math.vector';
 

@@ -35,7 +35,7 @@ class InteractiveScene {
 
     // physics engine
     let gravity_vector = new BABYLON.Vector3(0, -9.81, 0);
-    let physics_plugin = new BABYLON.CannonJSPlugin(true, 10, cannon);
+    let physics_plugin = new BABYLON.CannonJSPlugin(true, 5, cannon);
     this.scene.enablePhysics(gravity_vector, physics_plugin);
 
     // camera
@@ -48,7 +48,6 @@ class InteractiveScene {
     this.camera.upperBetaLimit = Math.PI * 0.6;
     this.camera.lowerRadiusLimit = camera_radius;
     this.camera.upperRadiusLimit = camera_radius;
-    this.camera.attachControl(this.canvas);
 
     // camera auto rotate
     const camera_rotate_framerate = 60;
@@ -69,10 +68,10 @@ class InteractiveScene {
     // light and shadow
     this.light = new BABYLON.DirectionalLight('light', new BABYLON.Vector3(-Math.sin(Math.PI / 12), -Math.cos(Math.PI / 12), 0), this.scene);
     this.light.position.scaleInPlace(500);
-    this.shadow = new BABYLON.ShadowGenerator(2048, this.light);
+    this.shadow = new BABYLON.ShadowGenerator(1024, this.light);
 
     // generate base meshes
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 16; i++) {
       let material = new MToonMaterial(`mtoonmaterial_${i}`, this.scene);
 
       let base_hue = Math.random();
@@ -85,7 +84,7 @@ class InteractiveScene {
       material.freeze();
 
       let mesh = BABYLON.SphereBuilder.CreateSphere(`sphere_${i}`,
-        { segments: 16, diameter: 1 }, this.scene);
+        { segments: 8, diameter: 1 }, this.scene);
       mesh.position.y = -20;
       mesh.isVisible = false;
       mesh.receiveShadows = true;
@@ -104,6 +103,10 @@ class InteractiveScene {
       mesh_limit = 32;
     } else if (mobile_detect.mobile()) {
       mesh_limit = 16;
+    } else {
+      // Desktop
+      // Camera control only works well on desktop, unfortunately
+      this.camera.attachControl(this.canvas);
     }
 
     // spawn initial meshes
@@ -123,7 +126,7 @@ class InteractiveScene {
     this.ground_mesh.material = ground_material;
 
     // change ground color over time
-    const ground_hue_shift_const = Math.random(); 
+    const ground_hue_shift_const = Math.random();
     const ground_hue_shift_framerate = 60;
     const ground_hue_shift_time = 100;
     this.ground_mesh.metadata = {
@@ -142,33 +145,20 @@ class InteractiveScene {
     this.ground_mesh.animations.push(this.ground_mesh_hue_shift);
     this.scene.beginAnimation(this.ground_mesh, 0, ground_hue_shift_framerate * ground_hue_shift_time, true);
 
-    // performance tracker
-    let frame_count = 0;
-    let frame_time_sum = 0;
+    let perf_monitor = new BABYLON.PerformanceMonitor(30);
 
     // update
     this.scene.registerBeforeRender(() => {
-      let delta = this.engine.getDeltaTime();
-
       // keep track of performance
-      frame_count++;
-      frame_time_sum += Math.min(delta, 50);
+      perf_monitor.sampleFrame();
 
-      if (frame_count > 10) {
-        // if performance doesn't meet target
-        if (this.meshes.length > 8 && frame_time_sum / frame_count > 35) {
-          this.destroy_mesh(this.meshes.pop());
-        }
-
-        frame_count = 0;
-        frame_time_sum = 0;
+      // if performance doesn't meet target, remove some meshes
+      if (this.meshes.length > 8 && perf_monitor.averageFrameTime > 40 && perf_monitor.averageFrameTimeVariance < 150) {
+        this.destroy_mesh(this.meshes.pop());
       }
 
       // update ground color
-      let ground_hue = this.ground_mesh.metadata.ground_hue_shift + ground_hue_shift_const;
-      if (ground_hue > 1) {
-        ground_hue -= 1;
-      }
+      let ground_hue = (this.ground_mesh.metadata.ground_hue_shift + ground_hue_shift_const) % 1;
       ground_material.diffuseColor = new BABYLON.Color3(...hsl_to_rgb(ground_hue, 0.3, 0.7));
       ground_material.shadeColor = new BABYLON.Color3(...hsl_to_rgb(ground_hue, 0.3, 0.5));
 
@@ -187,14 +177,16 @@ class InteractiveScene {
           continue;
         }
 
+        let this_physics = this.meshes[idx].getPhysicsImpostor();
+
         // nudge slow meshes
-        if (this.meshes[idx].getPhysicsImpostor().getLinearVelocity().length() < 0.5 && this.meshes[idx].position.y < -5) {
-          this.meshes[idx].getPhysicsImpostor().applyForce(this.meshes[idx].position.multiplyByFloats(1, 0, 1).normalize().scale(10), new BABYLON.Vector3(0, 1, 0));
+        if (this_physics.getLinearVelocity().lengthSquared() < 1 && this.meshes[idx].position.y < -9) {
+          this_physics.setLinearVelocity(this_physics.getLinearVelocity().scale(3));
         }
 
         // artificial terminal velocity
-        if (this.meshes[idx].getPhysicsImpostor().getLinearVelocity().y < -12) {
-          this.meshes[idx].getPhysicsImpostor().getLinearVelocity().y = -12;
+        if (this_physics.getLinearVelocity().y < -12) {
+          this_physics.getLinearVelocity().y = -12;
         }
       }
 
