@@ -27,7 +27,7 @@
     "cannon": "^0.6.2",
     "mobile-detect": "^1.4.4",
     "normalize.css": "^8.0.1",
-    "parcel": "^2.0.0-beta.1",
+    "parcel": "next",
     "sass": "^1.26.10",
     "typescript": "^3.9.7"
   }
